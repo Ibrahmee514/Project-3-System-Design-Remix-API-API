@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>News + Wikipedia Context</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui;
+            background: #0b0f14;
+            color: #e6edf3
+        }
+        
+        header {
+            padding: 18px 22px;
+            border-bottom: 1px solid rgba(255, 255, 255, .08);
+            background: #0f1620
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 1.35rem
+        }
+        
+        p {
+            margin: 6px 0 0;
+            color: #9fb3c8;
+            font-size: .9rem
+        }
+        
+        main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px
+        }
+        
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center
+        }
+        
+        input,
+        select {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            background: #0f1620;
+            color: #e6edf3
+        }
+        
+        button {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 0;
+            background: #1f6feb;
+            color: #fff;
+            cursor: pointer
+        }
+        
+        button:disabled {
+            opacity: .6;
+            cursor: not-allowed
+        }
+        
+        .status {
+            margin-top: 10px;
+            color: #9fb3c8;
+            font-size: .9rem
+        }
+        
+        .grid {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 14px
+        }
+        
+        .card {
+            background: #111826;
+            border: 1px solid rgba(255, 255, 255, .08);
+            border-radius: 12px;
+            overflow: hidden
+        }
+        
+        .thumb {
+            height: 160px;
+            background: #0b0f14;
+            background-size: cover;
+            background-position: center
+        }
+        
+        .meta {
+            padding: 12px 12px 14px
+        }
+        
+        .title {
+            margin: 0;
+            font-size: 1rem;
+            line-height: 1.25
+        }
+        
+        .desc {
+            margin: 8px 0 0;
+            color: #c6d4e1;
+            font-size: .86rem;
+            line-height: 1.4
+        }
+        
+        .wiki {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, .08);
+            color: #9fb3c8;
+            font-size: .82rem
+        }
+        
+        .foot {
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            color: #7f95aa;
+            font-size: .75rem
+        }
+        
+        a {
+            color: #58a6ff;
+            text-decoration: none
+        }
+        
+        a:hover {
+            text-decoration: underline
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>News + Wikipedia Context</h1>
+        <p>API + API mashup (Mediastack News + Wikipedia Summary)</p>
+    </header>
+
+    <main>
+        <div class="row">
+            <input id="q" placeholder="Search topic (optional) e.g. Tesla" />
+            <select id="country">
+        <option value="us">US</option>
+        <option value="ca">Canada</option>
+        <option value="gb">UK</option>
+        <option value="au">Australia</option>
+      </select>
+            <button id="btn">Load News</button>
+        </div>
+
+        <div id="status" class="status"></div>
+        <section id="grid" class="grid"></section>
+    </main>
+
+    <script>
+        // Netlify Function endpoint
+        var NEWS_ENDPOINT = "/.netlify/functions/news";
+
+        var btn = document.getElementById("btn");
+        var grid = document.getElementById("grid");
+        var statusEl = document.getElementById("status");
+
+        function setStatus(msg) {
+            statusEl.textContent = msg || "";
+        }
+
+        function escapeHTML(s) {
+            s = s || "";
+            return s.replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/\"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function cleanTopicFromTitle(title) {
+            title = title || "";
+            return String(title).split(" - ")[0].split(" | ")[0].trim();
+        }
+
+        function card(article) {
+            var image = article.image || article.thumbnail || "";
+            var title = article.title || "Untitled";
+            var desc = article.description || "";
+            var url = article.url || "#";
+            var source = article.source || "";
+            var published = article.published_at || article.published || "";
+            var topic = cleanTopicFromTitle(title);
+
+            return (
+                '<article class="card">' +
+                '<div class="thumb" style="background-image:url(\'' + (image || "https://via.placeholder.com/800x450?text=No+Image") + '\')"></div>' +
+                '<div class="meta">' +
+                '<h3 class="title"><a href="' + url + '" target="_blank" rel="noopener noreferrer">' + escapeHTML(title) + '</a></h3>' +
+                '<p class="desc">' + escapeHTML(desc) + '</p>' +
+                '<div class="wiki">' +
+                '<strong style="color:#cfe7f3">Context (Wikipedia):</strong> ' +
+                '<span class="wikiText" data-topic="' + escapeHTML(topic) + '">Loading…</span>' +
+                '</div>' +
+                '<div class="foot">' +
+                '<span>' + escapeHTML(source) + (published ? " · " + new Date(published).toLocaleString() : "") + '</span>' +
+                '<a href="' + url + '" target="_blank" rel="noopener noreferrer">Read</a>' +
+                '</div>' +
+                '</div>' +
+                '</article>'
+            );
+        }
+
+        async function fetchNews() {
+            btn.disabled = true;
+            grid.innerHTML = "";
+            setStatus("Loading news…");
+
+            var q = document.getElementById("q").value.trim();
+            var country = document.getElementById("country").value;
+
+            var url = new URL(NEWS_ENDPOINT, window.location.origin);
+            if (q) url.searchParams.set("q", q);
+            if (country) url.searchParams.set("countries", country);
+
+            try {
+                var res = await fetch(url.toString());
+                var data = await res.json();
+
+                if (!data || !Array.isArray(data.data)) {
+                    throw new Error("Unexpected response (missing data[])");
+                }
+
+                grid.innerHTML = data.data.slice(0, 10).map(card).join("");
+                setStatus("");
+                enrichWikipedia();
+            } catch (e) {
+                setStatus("Failed to load news. (Function not deployed or key missing)");
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function wikiSummary(topic) {
+            var r = await fetch(
+                "https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(topic)
+            );
+            if (!r.ok) return null;
+
+            var d = await r.json();
+            if (!d || !d.extract) return null;
+
+            var page = null;
+            if (d.content_urls && d.content_urls.desktop && d.content_urls.desktop.page) {
+                page = d.content_urls.desktop.page;
+            }
+
+            return {
+                extract: d.extract,
+                page: page
+            };
+        }
+
+        async function enrichWikipedia() {
+            // No spread operator (more compatible)
+            var nodeList = document.querySelectorAll(".wikiText[data-topic]");
+            var els = Array.prototype.slice.call(nodeList);
+            var cache = new Map();
+
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                var raw = el.getAttribute("data-topic");
+                var topic = raw ? raw.trim() : "";
+
+                if (!topic) {
+                    el.textContent = "No topic.";
+                    continue;
+                }
+
+                if (cache.has(topic)) {
+                    el.innerHTML = cache.get(topic);
+                    continue;
+                }
+
+                try {
+                    var info = await wikiSummary(topic);
+                    if (!info) {
+                        cache.set(topic, "No summary found.");
+                        el.textContent = "No summary found.";
+                        continue;
+                    }
+
+                    var short = info.extract.length > 180 ?
+                        info.extract.slice(0, 180).trim() + "…" :
+                        info.extract;
+
+                    var html = info.page ?
+                        (escapeHTML(short) + ' <a href="' + info.page + '" target="_blank" rel="noopener noreferrer">Wiki</a>') :
+                        escapeHTML(short);
+
+                    cache.set(topic, html);
+                    el.innerHTML = html;
+                } catch (err) {
+                    el.textContent = "Context unavailable.";
+                }
+            }
+        }
+
+        btn.addEventListener("click", fetchNews);
+    </script>
+</body>
+
+</html>
