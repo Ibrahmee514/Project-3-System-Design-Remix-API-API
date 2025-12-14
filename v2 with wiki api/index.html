@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>News + Wikipedia</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui;
+            background: #0b0f14;
+            color: #e6edf3;
+        }
+        
+        header {
+            padding: 16px;
+            border-bottom: 1px solid #222;
+        }
+        
+        main {
+            padding: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        
+        button {
+            padding: 10px 14px;
+            background: #1f6feb;
+            border: none;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        
+        .card {
+            background: #111826;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #1e2633;
+        }
+        
+        .thumb {
+            height: 150px;
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .meta {
+            padding: 12px;
+        }
+        
+        .title {
+            margin: 0 0 6px;
+            font-size: 1rem;
+        }
+        
+        .desc {
+            font-size: .85rem;
+            color: #c6d4e1;
+        }
+        
+        .wiki {
+            display: block;
+            margin-top: 8px;
+            font-size: .8rem;
+            color: #9fb3c8;
+        }
+        
+        a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h2>News + Wikipedia Context</h2>
+        <p>API + API mashup</p>
+    </header>
+
+    <main>
+        <button onclick="loadNews()">Load News</button>
+        <div id="grid" class="grid"></div>
+    </main>
+
+    <script>
+        const NEWS_ENDPOINT = "/.netlify/functions/news";
+
+        async function loadNews() {
+            const grid = document.getElementById("grid");
+            grid.innerHTML = "Loading…";
+
+            try {
+                const res = await fetch(NEWS_ENDPOINT);
+                const data = await res.json();
+
+                grid.innerHTML = data.data.map(article => card(article)).join("");
+                enrichWiki();
+            } catch {
+                grid.innerHTML = "Failed to load news.";
+            }
+        }
+
+        function card(a) {
+            const topic = (a.title || "").split(" - ")[0];
+            return `
+    <div class="card">
+      <div class="thumb" style="background-image:url('${a.image || ""}')"></div>
+      <div class="meta">
+        <h3 class="title">${a.title || "Untitled"}</h3>
+        <p class="desc">${a.description || ""}</p>
+        <span class="wiki" data-topic="${topic}">Loading context…</span>
+        <a href="${a.url}" target="_blank">Read</a>
+      </div>
+    </div>
+  `;
+        }
+
+        async function enrichWiki() {
+            document.querySelectorAll(".wiki").forEach(async el => {
+                const topic = el.dataset.topic;
+                try {
+                    const r = await fetch(
+                        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`
+                    );
+                    const d = await r.json();
+                    el.textContent = d.extract ?
+                        d.extract.slice(0, 160) + "…" :
+                        "No context found.";
+                } catch {
+                    el.textContent = "Context unavailable.";
+                }
+            });
+        }
+    </script>
+
+</body>
+
+</html>
